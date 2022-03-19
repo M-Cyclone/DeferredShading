@@ -16,8 +16,7 @@ struct GBuffer
 	uint32_t gBasecolor = 0;
 	uint32_t gNormal = 0;
 	uint32_t gMetallicRoughness = 0;
-
-	uint32_t depthRenderBuffer = 0;
+	uint32_t gDepthMap = 0;
 
 	GBuffer()
 	{
@@ -52,6 +51,13 @@ struct GBuffer
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, gMetallicRoughness, 0);
 
+		glGenTextures(1, &gDepthMap);
+		glBindTexture(GL_TEXTURE_2D, gDepthMap);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, kScreenWidth, kScreenHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, gDepthMap, 0);
+
 		GLuint attachments[] =
 		{
 			GL_COLOR_ATTACHMENT0,
@@ -60,11 +66,6 @@ struct GBuffer
 			GL_COLOR_ATTACHMENT3,
 		};
 		glDrawBuffers(static_cast<GLsizei>(std::size(attachments)), attachments);
-
-		glGenRenderbuffers(1, &depthRenderBuffer);
-		glBindRenderbuffer(GL_RENDERBUFFER, depthRenderBuffer);
-		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, kScreenWidth, kScreenHeight);
-		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRenderBuffer);
 
 		assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -76,7 +77,7 @@ struct GBuffer
 		glDeleteTextures(1, &gBasecolor);
 		glDeleteTextures(1, &gNormal);
 		glDeleteTextures(1, &gMetallicRoughness);
-		glDeleteRenderbuffers(1, &depthRenderBuffer);
+		glDeleteTextures(1, &gDepthMap);
 		glDeleteFramebuffers(1, &framebuffer);
 	}
 

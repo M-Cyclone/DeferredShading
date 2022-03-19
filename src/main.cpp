@@ -31,18 +31,18 @@
 #include "GBuffer.h"
 #include "Texture.h"
 #include "PointLight.h"
+#include "HdrTexture.h"
+#include "Cube.h"
 
 
 uint32_t kScreenWidth = 1440;
 uint32_t kScreenHeight = 810;
-const char* kWndName = "Shadow Mapping";
-
-uint32_t kDepthMapWidth = 1024;
-uint32_t kDepthMapHeight = 1024;
+const char* kWndName = "Deferred Shading";
 
 
 int main(int argc, char** argv)
 {
+	// glfw initialize
 	assert(glfwInit());
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -58,8 +58,10 @@ int main(int argc, char** argv)
 
 
 	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
 
 
+	// imgui settings
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
@@ -73,8 +75,9 @@ int main(int argc, char** argv)
 	ImGui_ImplOpenGL3_Init("#version 430");
 
 
-	static constexpr size_t xCount = 7;
-	static constexpr size_t yCount = 7;
+	// grid style sphere generation
+	static constexpr size_t xCount = 1;
+	static constexpr size_t yCount = 1;
 	Sphere<64, 64> spheres[xCount * yCount];
 	glm::vec3 positions[xCount * yCount];
 	for (size_t x = 0; x < xCount; ++x)
@@ -85,9 +88,12 @@ int main(int argc, char** argv)
 		}
 	}
 
+
+	// for deferred shading, like post-process
 	Plane showBoard;
 
 
+	// camera is set at a unchangable distance, while the direction to the objs can be change.
 	static constexpr float cameraDistance = yCount * 4.0f;
 	auto getPos = [](float theta, float phi) -> glm::vec3
 	{
@@ -105,7 +111,9 @@ int main(int argc, char** argv)
 	float cameraPhi = 0.0f;
 	Camera camera(getPos(cameraTheta, cameraPhi), { 0.0f, 0.0f, 0.0f });
 
-	PointLight lights[] = 
+
+	// 4 lights for default setting. 
+	PointLight lights[] =
 	{
 		{ { -10.0f, +10.0f, 10.0f }, { 300.0f, 300.0f, 300.0f } },
 		{ { +10.0f, +10.0f, 10.0f }, { 300.0f, 300.0f, 300.0f } },
@@ -114,24 +122,30 @@ int main(int argc, char** argv)
 	};
 
 
-	Shader shaderGBuf("shader/gBuffer.vert", "shader/gBuffer.frag");
-	Shader shaderPBR("shader/pbr.vert", "shader/pbr.frag");	
-	Shader shaderTest("shader/debug.vert", "shader/debug.frag");
+	Cube skybox;
+	Plane debugPlane;
+
+
+	Shader shaderTest("shader/debug.vert", "shader/debug.frag"); // debug shader
+	Shader shaderGBuf("shader/gBuffer.vert", "shader/gBuffer.frag"); // generate g-buf
+	Shader shaderPBR("shader/pbr.vert", "shader/pbr.frag");	// use g-buf to render objs, using microfacet model
+	Shader shaderSkybox("shader/skybox.vert", "shader/skybox.frag"); // skybox
 
 
 	GBuffer gBuffer;
-
 
 	Texture baseColor("res/rustediron/rustediron2_basecolor.png");
 	Texture normalMap("res/rustediron/rustediron2_normal.png");
 	Texture metallic("res/rustediron/rustediron2_metallic.png");
 	Texture roughness("res/rustediron/rustediron2_roughness.png");
 
-	
+	HdrTexture hdr("res/Newport_Loft/Newport_Loft_Ref.hdr");
+
+
+	glViewport(0, 0, kScreenWidth, kScreenHeight);
 	while (!glfwWindowShouldClose(window))
 	{
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-
 
 		// update
 		{
@@ -141,11 +155,10 @@ int main(int argc, char** argv)
 
 
 		// generate gBuffer
+		// enable g-buf
+		gBuffer.begin();
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		{
-			gBuffer.begin();
-
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 			shaderGBuf.bind();
 			shaderGBuf.setValue("proj", camera.getProj());
 			shaderGBuf.setValue("view", camera.getView());
@@ -174,15 +187,16 @@ int main(int argc, char** argv)
 				glBindVertexArray(spheres[i].vao);
 				glDrawElements(GL_TRIANGLE_STRIP, spheres[i].data.indices.size(), GL_UNSIGNED_INT, nullptr);
 			}
-
-			gBuffer.end();
 		}
+		gBuffer.end();
 
+
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		{
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-
 			shaderPBR.bind();
+
+			shaderPBR.setValue("cameraPos", camera.pos);
+
 			glActiveTexture(GL_TEXTURE0);
 			glBindTexture(GL_TEXTURE_2D, gBuffer.gPosition);
 			shaderPBR.setValue("gPosition", 0);
@@ -208,26 +222,46 @@ int main(int argc, char** argv)
 				++i;
 			}
 
-
-			shaderPBR.setValue("cameraPos", camera.pos);
-
-
 			glBindVertexArray(showBoard.vao);
 			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
 		}
 
+		// skybox
+		{
+			glDisable(GL_DEPTH_TEST);
+			shaderSkybox.bind();
+
+			shaderSkybox.setValue("proj", camera.getProj());
+			shaderSkybox.setValue("view", camera.getView());
+
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, hdr.cubeMap);
+			shaderSkybox.setValue("SkyBox", 0);
+
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, gBuffer.gDepthMap);
+			shaderSkybox.setValue("DepthMap", 1);
+
+			shaderSkybox.setValue("wndWidth", static_cast<float>(kScreenWidth));
+			shaderSkybox.setValue("wndHeight", static_cast<float>(kScreenHeight));
+
+			glBindVertexArray(skybox.vao);
+			glDrawArrays(GL_TRIANGLES, 0, 36);
+			glEnable(GL_DEPTH_TEST);
+		}
+
+		// debug
 		//{
-		//	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		//  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		//	shaderTest.bind();
 
-		//	testShader.bind();
-		//	testShader.setValue("Framebuffer", 0);
 		//	glActiveTexture(GL_TEXTURE0);
-		//	glBindTexture(GL_TEXTURE_2D, gBuffer.gMetallicRoughness);
+		//	glBindTexture(GL_TEXTURE_2D, gBuffer.gDepthMap);
+		//	shaderTest.setValue("Framebuffer", 0);
 
-		//	glBindVertexArray(test);
-		//	glDrawArrays(GL_TRIANGLES, 0, 6);
+		//	glBindVertexArray(debugPlane.vao);
+		//	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
 		//}
-
 
 		{
 			// Start the Dear ImGui frame
