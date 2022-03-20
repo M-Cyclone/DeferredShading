@@ -8,3 +8,6 @@
 在Deferred Shading Pipeline中如何从模型生成G-Buffer。
 使用G-Buffer进行PRB光照渲染。
 利用G-Buffer的深度图渲染Skybox。
+
+# 渲染结果
+![image](res/ScreenShot.png)
