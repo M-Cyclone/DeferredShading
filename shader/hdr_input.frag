@@ -1,4 +1,4 @@
-#version 430
+#version 430 core
 in vec3 WorldPos;
 
 out vec4 FragColor;

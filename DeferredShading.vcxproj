@@ -181,6 +181,7 @@
     <ClInclude Include="src\HdrTexture.h" />
     <ClInclude Include="src\Plane.h" />
     <ClInclude Include="src\PointLight.h" />
+    <ClInclude Include="src\PrecomputeBRDF.h" />
     <ClInclude Include="src\Sphere.h" />
     <ClInclude Include="src\Shader.h" />
     <ClInclude Include="src\Texture.h" />

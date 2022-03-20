@@ -33,6 +33,7 @@
 #include "PointLight.h"
 #include "HdrTexture.h"
 #include "Cube.h"
+#include "PrecomputeBRDF.h"
 
 
 uint32_t kScreenWidth = 1440;
@@ -59,6 +60,7 @@ int main(int argc, char** argv)
 
 	glEnable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
 
 	// imgui settings
@@ -142,6 +144,9 @@ int main(int argc, char** argv)
 	HdrTexture hdr("res/Newport_Loft/Newport_Loft_Ref.hdr");
 
 
+	PrecomputerBRDF pBrdf;
+
+
 	glViewport(0, 0, kScreenWidth, kScreenHeight);
 	while (!glfwWindowShouldClose(window))
 	{
@@ -213,6 +218,14 @@ int main(int argc, char** argv)
 			glBindTexture(GL_TEXTURE_2D, gBuffer.gMetallicRoughness);
 			shaderPBR.setValue("gMetallicRoughness", 3);
 
+			glActiveTexture(GL_TEXTURE4);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, hdr.prefilterMap);
+			shaderPBR.setValue("PrefilterMap", 4);
+
+			glActiveTexture(GL_TEXTURE5);
+			glBindTexture(GL_TEXTURE_2D, pBrdf.brdfLUT);
+			shaderPBR.setValue("BrdfLut", 5);
+
 
 			for (int i = 0; const auto & light : lights)
 			{
@@ -235,7 +248,7 @@ int main(int argc, char** argv)
 			shaderSkybox.setValue("view", camera.getView());
 
 			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_CUBE_MAP, hdr.cubeMap);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, hdr.hdrCubeMap);
 			shaderSkybox.setValue("SkyBox", 0);
 
 			glActiveTexture(GL_TEXTURE1);
@@ -250,13 +263,13 @@ int main(int argc, char** argv)
 			glEnable(GL_DEPTH_TEST);
 		}
 
-		// debug
+		//// debug
 		//{
 		//  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		//	shaderTest.bind();
 
 		//	glActiveTexture(GL_TEXTURE0);
-		//	glBindTexture(GL_TEXTURE_2D, gBuffer.gDepthMap);
+		//	glBindTexture(GL_TEXTURE_2D, pBrdf.brdfLUT);
 		//	shaderTest.setValue("Framebuffer", 0);
 
 		//	glBindVertexArray(debugPlane.vao);
