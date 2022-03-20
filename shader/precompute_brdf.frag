@@ -26,43 +26,37 @@ vec3 getImportanceSampleGGX(uint i, uint totalCount, vec3 N, float roughness)
 {
     vec2 randomX = getHammersley(i, totalCount);
 
-	float a = roughness*roughness;
+	float a = roughness * roughness;
 	
 	float phi = 2.0 * PI * randomX.x;
-	float cosTheta = sqrt((1.0 - randomX.y) / (1.0 + (a*a - 1.0) * randomX.y));
+	float cosTheta = sqrt((1.0 - randomX.y) / (1.0 + (a * a - 1.0) * randomX.y));
 	float sinTheta = sqrt(1.0 - cosTheta*cosTheta);
 	
 	// from spherical coordinates to cartesian coordinates - halfway vector
-	vec3 H = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+	vec3 halfway = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 	
 	// from tangent-space H vector to world-space sample vector
 	vec3 up = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
 	vec3 tangent = normalize(cross(up, N));
 	vec3 bitangent = cross(N, tangent);
 	
-	vec3 sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
+	vec3 sampleVec = tangent * halfway.x + bitangent * halfway.y + N * halfway.z;
 	return normalize(sampleVec);
 }
 
 
-float GeometrySchlickGGX(float NdotV, float roughness)
+float getSchlickBeckmannGGX(vec3 normal, vec3 dir, float k)
 {
-    // note that we use a different k for IBL
-    float a = roughness;
-    float k = (a * a) / 2.0;
-
-    float nom   = NdotV;
-    float denom = NdotV * (1.0 - k) + k;
-
-    return nom / denom;
+	float ndotd = max(dot(normal, dir), 0.0);
+	return ndotd / (ndotd * (1.0 - k) + k);
 }
 
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+float getGeometrySmith(vec3 normal, vec3 viewDir, vec3 lightDir, float roughness)
 {
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
-    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+    float k = (roughness * roughness) / 2.0;
+
+    float ggx1 = getSchlickBeckmannGGX(normal, viewDir, k);
+    float ggx2 = getSchlickBeckmannGGX(normal, lightDir, k);
 
     return ggx1 * ggx2;
 }
@@ -70,31 +64,31 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 
 vec2 getIntegrateBRDF(float NdotV, float roughness)
 {
-    vec3 V;
-    V.x = sqrt(1.0 - NdotV*NdotV);
-    V.y = 0.0;
-    V.z = NdotV;
+    // NdotV is dot(normal, viewDir), or cosTheta_i
+
+    vec3 viewDir = vec3(sqrt(1.0 - NdotV*NdotV), 0.0, NdotV);
 
     float A = 0.0;
     float B = 0.0; 
 
-    vec3 N = vec3(0.0, 0.0, 1.0);
+    vec3 normal = vec3(0.0, 0.0, 1.0);
     
     const uint kSampleCount = 1024u;
     for(uint i = 0u; i < kSampleCount; ++i)
     {
         // generates a sample vector that's biased towards the
         // preferred alignment direction (importance sampling).
-        vec3 H = getImportanceSampleGGX(i, kSampleCount, N, roughness);
-        vec3 L = normalize(2.0 * dot(V, H) * H - V);
+        vec3 halfway = getImportanceSampleGGX(i, kSampleCount, normal, roughness);
+        vec3 lightDir = normalize(2.0 * dot(viewDir, halfway) * halfway - viewDir);
 
-        float NdotL = max(L.z, 0.0);
-        float NdotH = max(H.z, 0.0);
-        float VdotH = max(dot(V, H), 0.0);
+        float NdotL = max(lightDir.z, 0.0);
+        float NdotH = max(halfway.z, 0.0);
+        float VdotH = max(dot(viewDir, halfway), 0.0);
 
         if(NdotL > 0.0)
         {
-            float G = GeometrySmith(N, V, L, roughness);
+            // calculate different part of the brdf
+            float G = getGeometrySmith(normal, viewDir, lightDir, roughness);
             float G_Vis = (G * VdotH) / (NdotH * NdotV);
             float Fc = pow(1.0 - VdotH, 5.0);
 
@@ -109,6 +103,8 @@ vec2 getIntegrateBRDF(float NdotV, float roughness)
 
 void main() 
 {
+    // the brdf integration result is only related to cosTheta_i and roughness
+    // when using this texture, brdf_integration = F0 * A(cosTheta, roughness) + B(cosTheta, roughness)
     vec2 integratedBRDF = getIntegrateBRDF(TexCoords.x, TexCoords.y);
     FragColor = integratedBRDF;
 }

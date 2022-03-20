@@ -37,23 +37,23 @@ vec3 getImportanceSampleGGX(uint idx, uint totalCount, vec3 normal, float roughn
     float cosTheta = sqrt((1.0 - randomX.y) / (1.0 + (alpha * alpha - 1.0) * randomX.y));
     float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
 
-    vec3 halfDirTangentSpace = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+    vec3 halfwayTangentSpace = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 
     vec3 up = abs(normal.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
     vec3 tangent = normalize(cross(up, normal));
     vec3 bitangent = normalize(cross(normal, tangent));
 
-    vec3 halfDirWorldSpace = tangent * halfDirTangentSpace.x + bitangent * halfDirTangentSpace.y + normal * halfDirTangentSpace.z;
-    return normalize(halfDirWorldSpace);
+    vec3 halfwayWorldSpace = tangent * halfwayTangentSpace.x + bitangent * halfwayTangentSpace.y + normal * halfwayTangentSpace.z;
+    return normalize(halfwayWorldSpace);
 }
 
 
-float getNormalDistribution(vec3 normal, vec3 halfDir, float roughness)
+float getNormalDistribution(vec3 normal, vec3 halfway, float roughness)
 {
 	// GGX model
 	float alpha = roughness * roughness;
 	float alpha2 = alpha * alpha;
-	float ndoth = max(dot(normal, halfDir), 0.0);
+	float ndoth = max(dot(normal, halfway), 0.0);
 
 	float value = ndoth * ndoth * (alpha2 - 1.0) + 1.0;
 
@@ -76,19 +76,19 @@ void main()
 
     for(uint i = 0; i < kSampleCount; ++i)
     {
-        vec3 halfDir = getImportanceSampleGGX(i, kSampleCount, normal, roughness);
-        vec3 lightDir = normalize(2.0 * dot(viewDir, halfDir) * halfDir - viewDir);
+        vec3 halfway = getImportanceSampleGGX(i, kSampleCount, normal, roughness);
+        vec3 lightDir = normalize(2.0 * dot(viewDir, halfway) * halfway - viewDir);
 
         float ldotn = dot(lightDir, normal);
         if(ldotn > 0.0)
         {
             // sample on the mipmap of HdrCubeMap to avoid the light points
             // microfacet model, the posibility density of the normal direction
-            float ndoth = max(dot(normal, halfDir), 0.0);
-            float hdotv = max(dot(viewDir, halfDir), 0.0);
+            float ndoth = max(dot(normal, halfway), 0.0);
+            float hdotv = max(dot(viewDir, halfway), 0.0);
 
             // the posibility density of the light direction for impotance sample
-            float pdf = getNormalDistribution(normal, halfDir, roughness) * ndoth / (4.0 * hdotv) + 0.0001;
+            float pdf = getNormalDistribution(normal, halfway, roughness) * ndoth / (4.0 * hdotv) + 0.0001;
 
             // Solid angle associated to a sample
             float saSample = 1.0 / (float(kSampleCount) * pdf + 0.0001);

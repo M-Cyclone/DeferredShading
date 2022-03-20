@@ -101,6 +101,8 @@ void main()
 
 	F0 = mix(vec3(0.04f), baseColor, metallic);
 
+
+	// point light
 	vec3 color = vec3(0.0);
 	for(int i = 0; i < LIGHT_COUNT; ++i)
 	{
@@ -117,10 +119,15 @@ void main()
 	}
 
 
+	// image light
 	const float kMaxReflectionLod = 4.0;
-	vec3 F = getFresnelSchlickRoughness(max(dot(normal, viewDir), 0.0), F0, roughness);
+
+	float ndotv = max(dot(normal, viewDir), 0.0);
+
 	vec3 prefilterLight = textureLod(PrefilterMap, reflectDir, roughness * kMaxReflectionLod).rgb;
-	vec2 brdf = texture(BrdfLut, vec2(max(dot(normal, viewDir), 0.0), roughness)).rg;
+	vec2 brdf = texture(BrdfLut, vec2(ndotv, roughness)).rg;
+
+	vec3 F = getFresnelSchlickRoughness(ndotv, F0, roughness);
 	vec3 specular = prefilterLight * (F * brdf.x + brdf.y);
 
 	color += specular;

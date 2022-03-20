@@ -22,6 +22,8 @@
 #include <imgui/backends/imgui_impl_glfw.h>
 #include <imgui/backends/imgui_impl_opengl3.h>
 
+#include <stb/stb_image_write.h>
+
 
 #include "Timer.h"
 #include "Shader.h"
@@ -289,6 +291,21 @@ int main(int argc, char** argv)
 				{
 					ImGui::SliderFloat("Theta", &cameraTheta, 20.0f, 160.0f);
 					ImGui::SliderFloat("Phi", &cameraPhi, -180.0f, 180.0f);
+
+					ImGui::TreePop();
+				}
+
+				if (ImGui::TreeNode("Utils"))
+				{
+					if (ImGui::Button("Screen Shot"))
+					{
+						std::vector<uint8_t> pixels(4 * kScreenHeight * kScreenWidth);
+
+						glReadPixels(0, 0, kScreenWidth, kScreenHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+						
+						stbi_flip_vertically_on_write(true);
+						stbi_write_png("res/ScreenShot.png", kScreenWidth, kScreenHeight, 4, pixels.data(), 0);
+					}
 
 					ImGui::TreePop();
 				}
